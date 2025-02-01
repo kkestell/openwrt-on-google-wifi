@@ -120,23 +120,175 @@ If the puck continues blinking purple, try pressing SW7 again or check the USB d
 
 # Configuration
 
-## Expand Storage
+Next, we'll do some basic configuration of OpenWrt. We'll be setting up three pucks (`ada`, `fez`, and `rio`) in a mesh network with DAWN.
 
-1. SSH into the puck and install required utilities:
-   ```sh
-   opkg update && opkg install cfdisk resize2fs
-   ```
-2. Run `cfdisk`:
-   ```sh
-   cfdisk /dev/mmcblk0
-   ```
-3. Resize the last partition:
-   - Select the last partition before the empty space.
-   - Choose "Resize."
-   - Accept the default size.
-   - Write the partition table and exit.
-4. Reboot the device.
-5. Resize the filesystem:
-   ```sh
-   resize2fs /dev/loop0
-   ```
+## Base Configuration
+
+### Initial Access
+
+SSH into the puck using its default IP:
+
+```bash
+ssh root@192.168.1.1
+```
+
+### Base Configuration for First Puck (ada)
+
+First, set a root password:
+
+```bash
+passwd
+```
+
+Configure the hostname:
+
+```bash
+uci set system.@system[0].hostname='ada'
+uci commit system
+```
+
+Set the LAN IP address:
+
+```bash
+uci set network.lan.ipaddr='192.168.1.1'
+uci commit network
+```
+
+Reboot:
+
+```bash
+reboot
+```
+
+SSH back in using the new IP:
+
+```bash
+ssh root@192.168.1.1
+```
+
+Plug the WAN port into your existing network. and verify connectivity:
+
+```bash
+ping openwrt.org
+```
+
+Configure the 2.4GHz radio:
+
+```bash
+uci set wireless.radio0.disabled='0'
+uci set wireless.radio0.country='US'
+uci set wireless.default_radio0.ssid='S'
+uci set wireless.default_radio0.encryption='psk2'
+uci set wireless.default_radio0.key='topsecret'
+```
+
+Configure the 5GHz radio:
+
+```bash
+uci set wireless.radio1.disabled='0'
+uci set wireless.radio1.country='US'
+uci set wireless.radio1.htmode='VHT80'
+uci set wireless.default_radio1.ssid='S'
+uci set wireless.default_radio1.encryption='psk2'
+uci set wireless.default_radio1.key='topsecret'
+```
+
+Install DAWN and its dependencies:
+
+```bash
+opkg update
+opkg install wpad-wolfssl dawn luci-app-dawn
+```
+
+Enable 802.11k and band steering features:
+
+```bash
+uci set wireless.default_radio0.ieee80211k='1'
+uci set wireless.default_radio0.bss_transition='1'
+uci set wireless.default_radio1.ieee80211k='1'
+uci set wireless.default_radio1.bss_transition='1'
+```
+
+Configure DAWN:
+
+```bash
+uci add dawn dawn
+uci set dawn.@dawn[0].rssi_weight='2'
+uci set dawn.@dawn[0].rssi_center='-65'
+uci set dawn.@dawn[0].kick_method='1'
+uci set dawn.@dawn[0].update_client='10'
+```
+
+Commit all changes and start services:
+```bash
+uci commit
+wifi
+/etc/init.d/dawn enable
+/etc/init.d/dawn start
+/etc/init.d/network restart
+```
+
+#### Second Puck (fez)
+
+Follow all steps above, but use these settings instead for hostname and IP:
+```bash
+uci set system.@system[0].hostname='fez'
+uci set network.lan.ipaddr='192.168.1.2'
+uci commit
+```
+
+#### Third Puck (rio)
+
+Follow all steps above, but use these settings instead for hostname and IP:
+```bash
+uci set system.@system[0].hostname='rio'
+uci set network.lan.ipaddr='192.168.1.3'
+uci commit
+```
+
+### Verification Steps
+
+1. Verify wireless setup on each puck:
+```bash
+iwinfo
+```
+
+Should show both 2.4GHz (radio0) and 5GHz (radio1) interfaces enabled with:
+- SSID: "S"
+- Encryption: WPA2 PSK
+- Both radios active and broadcasting
+
+2. Verify DAWN operation:
+```bash
+# Check DAWN service status
+/etc/init.d/dawn status
+
+# Check logs
+logread | grep dawn
+
+# Verify umdns is running
+/etc/init.d/umdns status
+```
+
+3. Access DAWN dashboard in LuCI:
+- http://192.168.1.1/cgi-bin/luci/admin/dawn/network_overview
+- http://192.168.1.2/cgi-bin/luci/admin/dawn/network_overview
+- http://192.168.1.3/cgi-bin/luci/admin/dawn/network_overview
+
+## Troubleshooting
+
+If nodes aren't seeing each other:
+1. Check DAWN network connectivity:
+```bash
+tcpdump -i br-lan port 1025
+```
+
+2. Verify all pucks have matching DAWN configurations:
+```bash
+uci show dawn
+```
+
+3. If umdns fails to start:
+```bash
+logread | grep umdns
+```
