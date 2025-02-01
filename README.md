@@ -197,6 +197,7 @@ Install DAWN and its dependencies:
 
 ```bash
 opkg update
+opkg remove wpad-basic-mbedtls
 opkg install wpad-wolfssl dawn luci-app-dawn
 ```
 
@@ -226,6 +227,12 @@ wifi
 /etc/init.d/dawn enable
 /etc/init.d/dawn start
 /etc/init.d/network restart
+```
+
+Reboot:
+
+```bash
+reboot
 ```
 
 #### Second Puck (fez)
